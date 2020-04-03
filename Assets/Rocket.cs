@@ -7,7 +7,9 @@ public class Rocket : MonoBehaviour
     private Rigidbody rigidBody;
     private AudioSource engineSound;
     
-    private const float thrust = 1.2f;
+    [SerializeField] private float thrust = 1000f;
+    [SerializeField] private float rcsThrust = 5f;
+    private const float rotationSpeed = 10f;
     
     // Start is called before the first frame update
     void Start()
@@ -19,17 +21,36 @@ public class Rocket : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        ProcessInput();
+        ThrustRocket();
+        RotateRocket();
     }
 
-    private void ProcessInput()
+    void OnCollisionEnter(Collision collision)
+    {
+        switch (collision.gameObject.tag)
+        {
+            case "Friendly":
+                print("OK");
+                break;
+            case "Finish":
+                print("DONE!!");
+                break;
+            default:
+                print("Dead.");
+                break;
+        }
+    }
+
+    private void ThrustRocket()
     {
         if (Input.GetKey(KeyCode.S))
         {
-            print("Thrusting");
-            rigidBody.AddRelativeForce(Vector3.up * thrust);
+            //print("Thrusting");
+            
+            float thrustThisFrame = thrust * Time.deltaTime;
+            rigidBody.AddRelativeForce(Vector3.up * thrustThisFrame);
 
-            if(!engineSound.isPlaying)
+            if (!engineSound.isPlaying)
             {
                 engineSound.Play();
             }
@@ -38,16 +59,27 @@ public class Rocket : MonoBehaviour
         {
             engineSound.Stop();
         }
-        
+    }
+
+    
+    private void RotateRocket()
+    {
+        rigidBody.freezeRotation = true; // take manual control of rotation
+
+        float rotationThisFrame = rcsThrust * rotationSpeed * Time.deltaTime;
+
         if (Input.GetKey(KeyCode.A))
         {
-            print("Rotating Left");
-            transform.Rotate(Vector3.forward);
+            //print("Rotating Left");
+            transform.Rotate(Vector3.forward * rotationThisFrame);
         }
         else if (Input.GetKey(KeyCode.D))
         {
-            print("Rotating Right");
-            transform.Rotate(-Vector3.forward);
+            //print("Rotating Right");
+            transform.Rotate(-Vector3.forward * rotationThisFrame);
         }
+
+        rigidBody.freezeRotation = false; // give control of rotation back to physics
     }
+
 }
