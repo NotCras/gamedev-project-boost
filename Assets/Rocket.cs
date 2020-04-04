@@ -1,15 +1,35 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Numerics;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using Vector3 = UnityEngine.Vector3;
 
 public class Rocket : MonoBehaviour
 {
     private Rigidbody rigidBody;
     private AudioSource engineSound;
     
-    [SerializeField] private float thrust = 1000f;
-    [SerializeField] private float rcsThrust = 5f;
-    private const float rotationSpeed = 10f;
+    [SerializeField] private float thrust = 80000f;
+    [SerializeField] private float rcsThrust = 150f;
+    [SerializeField] private float levelLoadDelay = 1f;
+    
+    [SerializeField] private AudioClip mainEngine;
+    [SerializeField] private AudioClip succeedLevel;
+    [SerializeField] private AudioClip youDied;
+
+    [SerializeField] private ParticleSystem engine;
+    [SerializeField] private ParticleSystem success;
+    [SerializeField] private ParticleSystem death;
+    
+    enum State
+    {
+        Alive,
+        Dying,
+        Transcending
+    };
+
+    private State state = State.Alive;
     
     // Start is called before the first frame update
     void Start()
@@ -21,59 +41,117 @@ public class Rocket : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        ThrustRocket();
-        RotateRocket();
+        if (state == State.Alive)
+        {
+            RespondToThrustInput();
+            RespondToRotateInput();
+        }
+        else
+        {
+            // do nothing
+        }
+
     }
 
     void OnCollisionEnter(Collision collision)
     {
+        if (state != State.Alive)
+        {
+            return; //don't do anything else
+        }
+        
         switch (collision.gameObject.tag)
         {
             case "Friendly":
-                print("OK");
                 break;
             case "Finish":
-                print("DONE!!");
+                LevelFinish();
                 break;
+/*            case "Wall":
+                break;*/
             default:
-                print("Dead.");
+                DeathSequence();
                 break;
         }
     }
 
-    private void ThrustRocket()
+    private void LevelFinish()
+    {
+        print("Finished Level");
+        state = State.Transcending;
+        engineSound.Stop();
+        engineSound.PlayOneShot(succeedLevel);
+        success.Play();
+        Invoke("LoadNextScene", levelLoadDelay);
+    }
+
+    private void DeathSequence()
+    {
+        print("Dead.");
+        state = State.Dying;
+        engineSound.Stop();
+        engineSound.PlayOneShot(youDied);
+        
+        death.Play();
+        engine.Stop();
+        
+        //rigidBody.AddRelativeTorque(Random.rotation.eulerAngles * 50000);
+        rigidBody.AddRelativeTorque(Vector3.up * 500000);
+        Invoke("Dying", levelLoadDelay);
+    }
+
+    private void Dying()
+    {
+        rigidBody.freezeRotation = true;
+        SceneManager.LoadScene(0);
+    }
+
+    private void LoadNextScene() //TODO more than two levels
+    {
+        SceneManager.LoadScene(1);
+    }
+
+    private void RespondToThrustInput()
     {
         if (Input.GetKey(KeyCode.S))
         {
             //print("Thrusting");
-            
-            float thrustThisFrame = thrust * Time.deltaTime;
-            rigidBody.AddRelativeForce(Vector3.up * thrustThisFrame);
 
-            if (!engineSound.isPlaying)
-            {
-                engineSound.Play();
-            }
+            ApplyThrust();
         }
         else
         {
             engineSound.Stop();
+            engine.Stop();
         }
     }
 
-    
-    private void RotateRocket()
+    private void ApplyThrust()
+    {
+        float thrustThisFrame = thrust * Time.deltaTime;
+        rigidBody.AddRelativeForce(Vector3.up * thrustThisFrame);
+
+        if (!engineSound.isPlaying)
+        {
+            engineSound.PlayOneShot(mainEngine);
+        }
+
+        engine.Play();
+    }
+
+
+    private void RespondToRotateInput()
     {
         rigidBody.freezeRotation = true; // take manual control of rotation
 
-        float rotationThisFrame = rcsThrust * rotationSpeed * Time.deltaTime;
+        float rotationThisFrame = rcsThrust * Time.deltaTime;
 
         if (Input.GetKey(KeyCode.A))
         {
             //print("Rotating Left");
             transform.Rotate(Vector3.forward * rotationThisFrame);
         }
-        else if (Input.GetKey(KeyCode.D))
+        else if (Input.GetKey(KeyCode.D) && state == State.Alive)
         {
             //print("Rotating Right");
             transform.Rotate(-Vector3.forward * rotationThisFrame);
