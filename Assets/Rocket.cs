@@ -9,6 +9,8 @@ public class Rocket : MonoBehaviour
 {
     private Rigidbody rigidBody;
     private AudioSource engineSound;
+
+    private bool collisionsAreEnabled = true;
     
     [SerializeField] private float thrust = 80000f;
     [SerializeField] private float rcsThrust = 150f;
@@ -21,15 +23,8 @@ public class Rocket : MonoBehaviour
     [SerializeField] private ParticleSystem engine;
     [SerializeField] private ParticleSystem success;
     [SerializeField] private ParticleSystem death;
-    
-    enum State
-    {
-        Alive,
-        Dying,
-        Transcending
-    };
 
-    private State state = State.Alive;
+    private bool isTransitioning = false;
     
     // Start is called before the first frame update
     void Start()
@@ -41,7 +36,12 @@ public class Rocket : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (state == State.Alive)
+        if (Debug.isDebugBuild)
+        {
+            checkDebugKeys();
+        }
+        
+        if (!isTransitioning)
         {
             RespondToThrustInput();
             RespondToRotateInput();
@@ -55,7 +55,7 @@ public class Rocket : MonoBehaviour
 
     void OnCollisionEnter(Collision collision)
     {
-        if (state != State.Alive)
+        if (isTransitioning || !collisionsAreEnabled)
         {
             return; //don't do anything else
         }
@@ -75,10 +75,27 @@ public class Rocket : MonoBehaviour
         }
     }
 
+    void checkDebugKeys()
+    {
+        if (Input.GetKeyDown(KeyCode.L))
+        {
+            LoadNextScene();
+            print("Loading next level.");
+
+        }
+        else if (Input.GetKeyDown(KeyCode.C))
+        {
+            // toggle collisions
+            collisionsAreEnabled = !collisionsAreEnabled;
+            print("Toggling collisions: " + collisionsAreEnabled);
+
+        }
+    }
+
     private void LevelFinish()
     {
         print("Finished Level");
-        state = State.Transcending;
+        isTransitioning = true;
         engineSound.Stop();
         engineSound.PlayOneShot(succeedLevel);
         success.Play();
@@ -88,7 +105,7 @@ public class Rocket : MonoBehaviour
     private void DeathSequence()
     {
         print("Dead.");
-        state = State.Dying;
+        isTransitioning = true;
         engineSound.Stop();
         engineSound.PlayOneShot(youDied);
         
@@ -106,9 +123,19 @@ public class Rocket : MonoBehaviour
         SceneManager.LoadScene(0);
     }
 
-    private void LoadNextScene() //TODO more than two levels
+    private void LoadNextScene() 
     {
-        SceneManager.LoadScene(1);
+        int currentSceneIndex = SceneManager.GetActiveScene().buildIndex;
+        int nextSceneIndex = currentSceneIndex + 1;
+        
+        if(currentSceneIndex == SceneManager.sceneCountInBuildSettings)
+        {
+            SceneManager.LoadScene(0); //loop back to start
+        }
+        else
+        {
+            SceneManager.LoadScene(nextSceneIndex);
+        }
     }
 
     private void RespondToThrustInput()
@@ -121,9 +148,14 @@ public class Rocket : MonoBehaviour
         }
         else
         {
-            engineSound.Stop();
-            engine.Stop();
+            StopApplyingThrust();
         }
+    }
+
+    private void StopApplyingThrust()
+    {
+        engineSound.Stop();
+        engine.Stop();
     }
 
     private void ApplyThrust()
@@ -138,12 +170,11 @@ public class Rocket : MonoBehaviour
 
         engine.Play();
     }
-
-
+    
     private void RespondToRotateInput()
     {
-        rigidBody.freezeRotation = true; // take manual control of rotation
-
+        rigidBody.angularVelocity = Vector3.zero; //remove rotation due to physics
+        
         float rotationThisFrame = rcsThrust * Time.deltaTime;
 
         if (Input.GetKey(KeyCode.A))
@@ -151,13 +182,12 @@ public class Rocket : MonoBehaviour
             //print("Rotating Left");
             transform.Rotate(Vector3.forward * rotationThisFrame);
         }
-        else if (Input.GetKey(KeyCode.D) && state == State.Alive)
+        else if (Input.GetKey(KeyCode.D) && !isTransitioning)
         {
             //print("Rotating Right");
             transform.Rotate(-Vector3.forward * rotationThisFrame);
         }
 
-        rigidBody.freezeRotation = false; // give control of rotation back to physics
     }
 
 }
